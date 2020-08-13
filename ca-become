@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -e -o pipefail
+
+usage() {
+    echo 
+    echo "#############################"
+    echo "#  Create CA Signed certs   #"
+    echo "#############################"
+    echo
+    echo "Usage: $0 -c CA_FOR_SIGNING"
+}
+
+exit_error() {
+  if [[ -n "$1" ]]; then
+    echo "$1"
+  fi
+  usage
+  exit 1
+}
+
+
+ca_create() {
+    mkdir -p ~/.ca
+    pushd ~/.ca
+    # Generate private key
+    openssl genrsa -des3 -out "$CERT.key" 2048
+    # Generate root certificate
+    openssl req -x509 -new -nodes -key "$CERT.key" -sha256 -days 1825 -out "$CERT.pem"
+    popd
+
+    echo 
+    echo "CA created. Please add the created root certificate to your trust store"
+    echo "You can find it in ~/.ca/$CERT.pem"
+    echo 
+}
+
+while getopts ":c:" options; do
+  case "${options}" in
+    c)
+      CERT=${OPTARG}
+      ;;
+    :)                                         # If expected argument omitted:
+      exit_error "Error: -${OPTARG} requires an argument."
+      ;;
+    *)                                         # If unknown (any other) option:
+      exit_error "Invalid flag ${options} included"
+      ;;
+  esac
+done
+
+ERR=""
+validate() {
+  if [[ -z "$2" ]]; then
+    ERR="$ERR$1 is missing$NL"
+  fi
+}
+
+validate CA_FOR_SIGNING "$CERT"
+
+if [[ -n $ERR ]]; then
+  exit_error "$ERR"
+else
+  ca_create
+fi

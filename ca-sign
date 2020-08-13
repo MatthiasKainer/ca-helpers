@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -e -o pipefail
+NL=$'\n'
+
+usage() {
+    echo
+    echo "#############################"
+    echo "#  Create CA Signed certs   #"
+    echo "#############################"
+    echo
+    echo "To create your CA for signing, run ca-become -c CA_FOR_SIGNING first"
+    echo 
+    echo "Usage: $0 -d DOMAIN -c CA_FOR_SIGNING [ -a ALTERNATIVE_DOMAIN ]"
+}
+
+exit_error() {
+  if [[ -n "$1" ]]; then
+    echo "$1"
+  fi
+  usage
+  exit 1
+}
+
+sign() {
+    [[ -e $DOMAIN.key ]] || openssl genrsa -out "$DOMAIN".key 2048
+    [[ -e $DOMAIN.csr ]] || openssl req -new -key "$DOMAIN".key -out "$DOMAIN".csr
+    DNS_2=""
+    if [[ -n $ALTERNATIVE_DOMAIN ]]; then
+      DNS_2="DNS.1 = \"$ALTERNATIVE_DOMAIN\""
+    fi
+    >"$DOMAIN".ext cat <<-EOF
+    authorityKeyIdentifier=keyid,issuer
+    basicConstraints=CA:FALSE
+    keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+    subjectAltName = @alt_names
+    [alt_names]
+    DNS.1 = "$DOMAIN"
+    $DNS_2
+EOF
+
+    openssl x509 -req -in "$DOMAIN".csr \
+        -CA ~/.ca/"$CERT".pem -CAkey ~/.ca/"$CERT".key \
+        -CAcreateserial \
+        -out "$DOMAIN".crt -days 365 -sha256 -extfile "$DOMAIN".ext
+}
+
+while getopts ":d:c:a:" options; do
+  case "${options}" in
+    d)
+      DOMAIN=${OPTARG}
+      ;;
+    c)
+      CERT=${OPTARG}
+      ;;
+    a)
+      ALTERNATIVE_DOMAIN=${OPTARG}
+      ;;
+    :)                                         # If expected argument omitted:
+      exit_error "Error: -${OPTARG} requires an argument."
+      ;;
+    *)                                         # If unknown (any other) option:
+      exit_error "Invalid flag ${options} included"
+      ;;
+  esac
+done
+
+ERR=""
+validate() {
+  if [[ -z "$2" ]]; then
+    ERR="$ERR$1 is missing$NL"
+  fi
+}
+
+validate CA_FOR_SIGNING "$CERT"
+validate DOMAIN "$DOMAIN"
+
+if [[ -n $ERR ]]; then
+  exit_error "$ERR"
+else
+  sign
+fi
