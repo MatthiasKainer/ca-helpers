@@ -26,7 +26,7 @@ sign() {
     [[ -e $DOMAIN.csr ]] || openssl req -new -key "$DOMAIN".key -out "$DOMAIN".csr
     DNS_2=""
     if [[ -n $ALTERNATIVE_DOMAIN ]]; then
-      DNS_2="DNS.1 = \"$ALTERNATIVE_DOMAIN\""
+      DNS_2="DNS.2 = \"$ALTERNATIVE_DOMAIN\""
     fi
     >"$DOMAIN".ext cat <<-EOF
     authorityKeyIdentifier=keyid,issuer
